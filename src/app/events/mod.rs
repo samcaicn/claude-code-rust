@@ -445,7 +445,7 @@ mod tests {
     use crate::agent::events::TerminalProcess;
     use crate::app::slash::{SlashCandidate, SlashContext, SlashState};
     use crate::app::{
-        ActiveView, BlockCache, CancelOrigin, FocusOwner, FocusTarget, FullscreenView, HelpView,
+        ActiveView, BlockCache, CancelOrigin, FocusOwner, FocusTarget, FullscreenView,
         InlinePermission, InlineQuestion, ReleaseReason, SelectionKind, SelectionPoint,
         SelectionState, SurfaceMode, TerminalLifecycleState, TextBlockSpacing, TodoItem,
         TodoStatus, ToolCallInfo, ToolCallScope, UsageSnapshot, UsageSourceKind, mention,
@@ -3479,26 +3479,6 @@ mod tests {
     }
 
     #[test]
-    fn help_overlay_left_right_switches_help_view_tab() {
-        let mut app = make_test_app();
-        app.input.set_text("?");
-        app.help_open = true;
-        app.help_view = HelpView::Keys;
-
-        dispatch_key_by_focus(&mut app, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-        assert_eq!(app.help_view, HelpView::SlashCommands);
-
-        dispatch_key_by_focus(&mut app, KeyEvent::new(KeyCode::Right, KeyModifiers::NONE));
-        assert_eq!(app.help_view, HelpView::Subagents);
-
-        dispatch_key_by_focus(&mut app, KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-        assert_eq!(app.help_view, HelpView::SlashCommands);
-
-        dispatch_key_by_focus(&mut app, KeyEvent::new(KeyCode::Left, KeyModifiers::NONE));
-        assert_eq!(app.help_view, HelpView::Keys);
-    }
-
-    #[test]
     fn tab_toggles_todo_focus_target_for_open_todos() {
         let mut app = make_test_app();
         app.todos.push(TodoItem {
@@ -4430,10 +4410,9 @@ mod tests {
     }
 
     #[test]
-    fn connecting_state_allows_navigation_and_help_shortcuts() {
+    fn connecting_state_allows_navigation_shortcuts() {
         let mut app = make_test_app();
         app.status = AppStatus::Connecting;
-        app.help_view = HelpView::Keys;
         app.viewport.scroll_target = 2;
 
         // Chat navigation remains available during startup.
@@ -4444,20 +4423,6 @@ mod tests {
             Event::Key(KeyEvent::new(KeyCode::Down, KeyModifiers::NONE)),
         );
         assert_eq!(app.viewport.scroll_target, 2);
-
-        // Help toggle via "?" remains available.
-        handle_terminal_event(
-            &mut app,
-            Event::Key(KeyEvent::new(KeyCode::Char('?'), KeyModifiers::NONE)),
-        );
-        assert!(app.is_help_active());
-
-        // Help tab navigation still works.
-        handle_terminal_event(
-            &mut app,
-            Event::Key(KeyEvent::new(KeyCode::Right, KeyModifiers::NONE)),
-        );
-        assert_eq!(app.help_view, HelpView::SlashCommands);
     }
 
     #[test]
@@ -4466,7 +4431,6 @@ mod tests {
         app.status = AppStatus::Connecting;
         app.input.set_text("seed");
         app.pending_submit = None;
-        app.help_view = HelpView::Keys;
 
         for key in [
             KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE),
@@ -4481,7 +4445,6 @@ mod tests {
 
         assert_eq!(app.input.text(), "seed");
         assert!(app.pending_submit.is_none());
-        assert_eq!(app.help_view, HelpView::Keys);
     }
 
     #[test]
