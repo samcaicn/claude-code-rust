@@ -4756,7 +4756,7 @@ mod tests {
             ClientEvent::SessionUpdate(model::SessionUpdate::ApiRetryUpdate {
                 attempt: 1,
                 max_retries: 4,
-                retry_delay_ms: 1000,
+                retry_delay_ms: 1000.0,
                 error_status: None,
                 error: model::ApiRetryError::Unknown,
             }),
@@ -4766,7 +4766,7 @@ mod tests {
             ClientEvent::SessionUpdate(model::SessionUpdate::ApiRetryUpdate {
                 attempt: 2,
                 max_retries: 4,
-                retry_delay_ms: 1500,
+                retry_delay_ms: 1500.0,
                 error_status: Some(529),
                 error: model::ApiRetryError::ServerError,
             }),
