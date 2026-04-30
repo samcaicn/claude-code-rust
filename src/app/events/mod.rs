@@ -13,8 +13,8 @@ mod tool_updates;
 mod turn;
 
 use super::{
-    ActiveView, App, AppStatus, ChatMessage, InvalidationLevel, MessageBlock, MessageRole,
-    PendingCommandAck, SystemSeverity, TextBlock,
+    App, AppStatus, ChatMessage, FullscreenView, InvalidationLevel, MessageBlock, MessageRole,
+    PendingCommandAck, SurfaceMode, SystemSeverity, TextBlock,
 };
 use crate::agent::model;
 use crate::app::keys::reclaim_input_from_inline_prompt_if_needed;
@@ -84,20 +84,20 @@ fn handle_resize(app: &mut App, width: u16, height: u16) {
 }
 
 fn dispatch_key_by_view(app: &mut App, key: crossterm::event::KeyEvent) -> bool {
-    match app.active_view {
-        ActiveView::Chat => {
+    match app.surface_mode {
+        SurfaceMode::Chat => {
             app.active_paste_session = None;
             super::keys::dispatch_key_by_focus(app, key)
         }
-        ActiveView::Config => {
+        SurfaceMode::Fullscreen(FullscreenView::Config) => {
             super::config::handle_key(app, key);
             true
         }
-        ActiveView::Trusted => {
+        SurfaceMode::Fullscreen(FullscreenView::Trusted) => {
             super::trust::handle_key(app, key);
             true
         }
-        ActiveView::SessionPicker => {
+        SurfaceMode::Fullscreen(FullscreenView::SessionPicker) => {
             super::session_picker::handle_key(app, key);
             true
         }
@@ -105,20 +105,20 @@ fn dispatch_key_by_view(app: &mut App, key: crossterm::event::KeyEvent) -> bool 
 }
 
 fn dispatch_mouse_by_view(app: &mut App, mouse: crossterm::event::MouseEvent) {
-    match app.active_view {
-        ActiveView::Chat => {
+    match app.surface_mode {
+        SurfaceMode::Chat => {
             app.active_paste_session = None;
             let _ = mouse;
         }
-        ActiveView::Config | ActiveView::Trusted | ActiveView::SessionPicker => {
+        SurfaceMode::Fullscreen(_) => {
             let _ = mouse;
         }
     }
 }
 
 fn dispatch_paste_by_view(app: &mut App, text: &str) -> bool {
-    match app.active_view {
-        ActiveView::Chat => {
+    match app.surface_mode {
+        SurfaceMode::Chat => {
             if !matches!(
                 app.status,
                 AppStatus::Connecting | AppStatus::CommandPending | AppStatus::Error
@@ -130,8 +130,8 @@ fn dispatch_paste_by_view(app: &mut App, text: &str) -> bool {
             }
             false
         }
-        ActiveView::Config => super::config::handle_paste(app, text),
-        ActiveView::Trusted | ActiveView::SessionPicker => false,
+        SurfaceMode::Fullscreen(FullscreenView::Config) => super::config::handle_paste(app, text),
+        SurfaceMode::Fullscreen(FullscreenView::Trusted | FullscreenView::SessionPicker) => false,
     }
 }
 
@@ -448,10 +448,10 @@ mod tests {
     use crate::app::handoff::types::{AssistantCommittedUnit, TranscriptEntry};
     use crate::app::slash::{SlashCandidate, SlashContext, SlashState};
     use crate::app::{
-        ActiveView, BlockCache, CancelOrigin, ChatRebuildKind, FocusOwner, FocusTarget,
-        FullscreenView, InlinePermission, InlineQuestion, ReleaseReason, SurfaceMode,
-        TerminalLifecycleState, TextBlockSpacing, TodoItem, TodoStatus, ToolCallInfo,
-        ToolCallScope, UsageSnapshot, UsageSourceKind, mention,
+        BlockCache, CancelOrigin, ChatRebuildKind, FocusOwner, FocusTarget, FullscreenView,
+        InlinePermission, InlineQuestion, ReleaseReason, SurfaceMode, TerminalLifecycleState,
+        TextBlockSpacing, TodoItem, TodoStatus, ToolCallInfo, ToolCallScope, UsageSnapshot,
+        UsageSourceKind, mention,
     };
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     use pretty_assertions::assert_eq;
@@ -1285,7 +1285,7 @@ mod tests {
     fn test_app_defaults() {
         let app = make_test_app();
         assert!(app.messages.is_empty());
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert_eq!(app.terminal_lifecycle, TerminalLifecycleState::Running(SurfaceMode::Chat));
         assert!(!app.surface_dirty.fullscreen.redraw);
@@ -1855,7 +1855,7 @@ mod tests {
         tokio::task::LocalSet::new()
             .run_until(async {
                 let mut app = make_test_app();
-                app.active_view = ActiveView::Config;
+                app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Config);
                 app.config.active_tab = crate::app::ConfigTab::Usage;
 
                 handle_client_event(&mut app, connected_event("claude-updated"));
@@ -2237,7 +2237,7 @@ mod tests {
             },
         );
 
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert!(app.startup_recent_sessions_loaded);
         assert!(!app.startup_session_picker_resolved);
 
@@ -2245,7 +2245,7 @@ mod tests {
         app.conn = Some(Rc::new(crate::agent::client::AgentConnection::new(tx)));
         handle_client_event(&mut app, connected_event("claude-updated"));
 
-        assert_eq!(app.active_view, ActiveView::SessionPicker);
+        assert_eq!(app.surface_mode, SurfaceMode::Fullscreen(FullscreenView::SessionPicker));
         assert!(app.startup_session_picker_resolved);
     }
 
@@ -2257,12 +2257,12 @@ mod tests {
         app.conn = Some(Rc::new(crate::agent::client::AgentConnection::new(tx)));
 
         handle_client_event(&mut app, connected_event("claude-updated"));
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert!(!app.startup_session_picker_resolved);
 
         handle_client_event(&mut app, ClientEvent::SessionsListed { sessions: Vec::new() });
 
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert!(app.startup_session_picker_resolved);
         let last = app.messages.last().expect("info message");
         let text = match last.blocks.first().expect("text block") {
@@ -2275,7 +2275,7 @@ mod tests {
     #[test]
     fn sessions_listed_refresh_preserves_picker_selection_by_session_id() {
         let mut app = make_test_app();
-        app.active_view = ActiveView::SessionPicker;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::SessionPicker);
         app.recent_sessions = vec![
             crate::app::RecentSessionInfo {
                 session_id: "session-1".to_owned(),
@@ -4517,7 +4517,7 @@ mod tests {
         app.settings_home_override = Some(dir.path().to_path_buf());
         app.cwd_raw = dir.path().to_string_lossy().to_string();
         crate::app::config::open(&mut app).expect("open settings");
-        app.active_view = ActiveView::Config;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Config);
         app.config.selected_setting_index = crate::app::config::setting_specs()
             .iter()
             .position(|spec| spec.id == crate::app::config::SettingId::FastMode)
@@ -4542,7 +4542,7 @@ mod tests {
         app.settings_home_override = Some(dir.path().to_path_buf());
         app.cwd_raw = dir.path().to_string_lossy().to_string();
         crate::app::config::open(&mut app).expect("open settings");
-        app.active_view = ActiveView::Config;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Config);
         app.input.set_text("seed");
 
         handle_terminal_event(
@@ -4550,7 +4550,7 @@ mod tests {
             Event::Key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE)),
         );
 
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert_eq!(app.input.text(), "seed");
         assert!(app.pending_submit.is_none());
     }
@@ -4558,7 +4558,7 @@ mod tests {
     #[test]
     fn settings_view_ignores_paste_events() {
         let mut app = make_test_app();
-        app.active_view = ActiveView::Config;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Config);
 
         handle_terminal_event(&mut app, Event::Paste("blocked".into()));
 
@@ -4595,7 +4595,7 @@ mod tests {
         std::fs::write(&path, "{\n  \"projects\": {}\n}\n").expect("write");
 
         let mut app = make_test_app();
-        app.active_view = ActiveView::Trusted;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Trusted);
         app.input.set_text("seed");
         app.cwd_raw = dir.path().join("project").to_string_lossy().to_string();
         app.config.preferences_path = Some(path);
@@ -4608,7 +4608,7 @@ mod tests {
             Event::Key(KeyEvent::new(KeyCode::Char('y'), KeyModifiers::NONE)),
         );
 
-        assert_eq!(app.active_view, ActiveView::Chat);
+        assert_eq!(app.surface_mode, SurfaceMode::Chat);
         assert_eq!(app.input.text(), "seed");
         assert!(app.pending_paste_text.is_empty());
         assert!(app.startup_connection_requested);
@@ -4617,7 +4617,7 @@ mod tests {
     #[test]
     fn trusted_view_ignores_paste_events() {
         let mut app = make_test_app();
-        app.active_view = ActiveView::Trusted;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::Trusted);
 
         handle_terminal_event(&mut app, Event::Paste("blocked".into()));
 
@@ -4628,7 +4628,7 @@ mod tests {
     #[test]
     fn session_picker_ignores_paste_events() {
         let mut app = make_test_app();
-        app.active_view = ActiveView::SessionPicker;
+        app.surface_mode = SurfaceMode::Fullscreen(FullscreenView::SessionPicker);
 
         handle_terminal_event(&mut app, Event::Paste("blocked".into()));
 
