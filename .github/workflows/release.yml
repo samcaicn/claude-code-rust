@@ -15,18 +15,13 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
+    name: Build macOS (x86_64)
+    runs-on: macos-13
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            arch: arm64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            arch: x86_64
+    env:
+      target: x86_64-apple-darwin
+      arch: x86_64
 
     steps:
       - uses: actions/checkout@v6
@@ -34,7 +29,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ env.target }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,101 +46,19 @@ jobs:
 
       - name: Build release
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin claude-rs
-          ls -la target/${{ matrix.target }}/release/claude-rs
+          cargo build --release --target ${{ env.target }} --bin claude-rs
+          ls -la target/${{ env.target }}/release/claude-rs
 
       - name: Bundle bridge script
         run: |
-          mkdir -p target/${{ matrix.target }}/release/agent-sdk/dist
-          cp -r agent-sdk/dist/bridge.js target/${{ matrix.target }}/release/agent-sdk/dist/
-          cp -r agent-sdk/dist/types.js target/${{ matrix.target }}/release/agent-sdk/dist/
-          ls -la target/${{ matrix.target }}/release/agent-sdk/dist/
+          mkdir -p target/${{ env.target }}/release/agent-sdk/dist
+          cp -r agent-sdk/dist/bridge.js target/${{ env.target }}/release/agent-sdk/dist/
+          cp -r agent-sdk/dist/types.js target/${{ env.target }}/release/agent-sdk/dist/
+          ls -la target/${{ env.target }}/release/agent-sdk/dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: claude-rs-${{ matrix.arch }}-apple-darwin
-          path: target/${{ matrix.target }}/release/
+          name: claude-rs-${{ env.arch }}-apple-darwin
+          path: target/${{ env.target }}/release/
           retention-days: 5
-
-  build-linux:
-    name: Build Linux
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Build agent-sdk
-        run: |
-          npm install --prefix agent-sdk
-          npm run build --prefix agent-sdk
-
-      - name: Cache cargo registry
-        uses: Swatinem/rust-cache@v2
-
-      - name: Build release
-        run: |
-          cargo build --release --bin claude-rs
-          ls -la target/release/claude-rs
-
-      - name: Bundle bridge script
-        run: |
-          mkdir -p target/release/agent-sdk/dist
-          cp -r agent-sdk/dist/bridge.js target/release/agent-sdk/dist/
-          cp -r agent-sdk/dist/types.js target/release/agent-sdk/dist/
-          ls -la target/release/agent-sdk/dist/
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: claude-rs-x86_64-unknown-linux-gnu
-          path: target/release/
-          retention-days: 5
-
-  release:
-    name: Create Release
-    needs: [build-macos, build-linux]
-    runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: artifacts
-
-      - name: Display structure of downloaded files
-        run: ls -laR artifacts/
-
-      - name: Prepare release artifacts
-        run: |
-          mv artifacts/claude-rs-arm64-apple-darwin/claude-rs ./claude-rs-arm64-apple-darwin
-          mv artifacts/claude-rs-arm64-apple-darwin/agent-sdk ./claude-rs-arm64-apple-darwin/
-          mv artifacts/claude-rs-x86_64-apple-darwin/claude-rs ./claude-rs-x86_64-apple-darwin
-          mv artifacts/claude-rs-x86_64-apple-darwin/agent-sdk ./claude-rs-x86_64-apple-darwin/
-          mv artifacts/claude-rs-x86_64-unknown-linux-gnu/claude-rs ./claude-rs-x86_64-unknown-linux-gnu
-          mv artifacts/claude-rs-x86_64-unknown-linux-gnu/agent-sdk ./claude-rs-x86_64-unknown-linux-gnu/
-          ls -la
-
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: Claude Rust ${{ github.event.inputs.version }}
-          draft: false
-          prerelease: true
-          files: |
-            claude-rs-arm64-apple-darwin
-            claude-rs-x86_64-apple-darwin
-            claude-rs-x86_64-unknown-linux-gnu
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
