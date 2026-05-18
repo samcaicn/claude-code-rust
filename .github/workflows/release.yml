@@ -36,6 +36,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build agent-sdk
+        run: |
+          npm install --prefix agent-sdk
+          npm run build --prefix agent-sdk
+
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
 
@@ -44,11 +54,18 @@ jobs:
           cargo build --release --target ${{ matrix.target }} --bin claude-rs
           ls -la target/${{ matrix.target }}/release/claude-rs
 
+      - name: Bundle bridge script
+        run: |
+          mkdir -p target/${{ matrix.target }}/release/agent-sdk/dist
+          cp -r agent-sdk/dist/bridge.js target/${{ matrix.target }}/release/agent-sdk/dist/
+          cp -r agent-sdk/dist/types.js target/${{ matrix.target }}/release/agent-sdk/dist/
+          ls -la target/${{ matrix.target }}/release/agent-sdk/dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: claude-rs-${{ matrix.arch }}-apple-darwin
-          path: target/${{ matrix.target }}/release/claude-rs
+          path: target/${{ matrix.target }}/release/
           retention-days: 5
 
   build-linux:
@@ -60,6 +77,16 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build agent-sdk
+        run: |
+          npm install --prefix agent-sdk
+          npm run build --prefix agent-sdk
+
       - name: Cache cargo registry
         uses: Swatinem/rust-cache@v2
 
@@ -68,11 +95,18 @@ jobs:
           cargo build --release --bin claude-rs
           ls -la target/release/claude-rs
 
+      - name: Bundle bridge script
+        run: |
+          mkdir -p target/release/agent-sdk/dist
+          cp -r agent-sdk/dist/bridge.js target/release/agent-sdk/dist/
+          cp -r agent-sdk/dist/types.js target/release/agent-sdk/dist/
+          ls -la target/release/agent-sdk/dist/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: claude-rs-x86_64-unknown-linux-gnu
-          path: target/release/claude-rs
+          path: target/release/
           retention-days: 5
 
   release:
@@ -92,6 +126,16 @@ jobs:
       - name: Display structure of downloaded files
         run: ls -laR artifacts/
 
+      - name: Prepare release artifacts
+        run: |
+          mv artifacts/claude-rs-arm64-apple-darwin/claude-rs ./claude-rs-arm64-apple-darwin
+          mv artifacts/claude-rs-arm64-apple-darwin/agent-sdk ./claude-rs-arm64-apple-darwin/
+          mv artifacts/claude-rs-x86_64-apple-darwin/claude-rs ./claude-rs-x86_64-apple-darwin
+          mv artifacts/claude-rs-x86_64-apple-darwin/agent-sdk ./claude-rs-x86_64-apple-darwin/
+          mv artifacts/claude-rs-x86_64-unknown-linux-gnu/claude-rs ./claude-rs-x86_64-unknown-linux-gnu
+          mv artifacts/claude-rs-x86_64-unknown-linux-gnu/agent-sdk ./claude-rs-x86_64-unknown-linux-gnu/
+          ls -la
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -100,8 +144,8 @@ jobs:
           draft: false
           prerelease: true
           files: |
-            artifacts/claude-rs-arm64-apple-darwin/claude-rs
-            artifacts/claude-rs-x86_64-apple-darwin/claude-rs
-            artifacts/claude-rs-x86_64-unknown-linux-gnu/claude-rs
+            claude-rs-arm64-apple-darwin
+            claude-rs-x86_64-apple-darwin
+            claude-rs-x86_64-unknown-linux-gnu
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
