@@ -110,10 +110,12 @@ pub fn select_language() -> String {
         }
     }
 
-    prompt_language_selection()
+    let selected = prompt_language_selection();
+    unsafe { env::set_var("CLAUDE_RS_LANG", &selected) };
+    selected
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct RegisterRequest {
     hardware_fingerprint: String,
     platform: String,
@@ -288,22 +290,22 @@ pub fn register_device() -> anyhow::Result<DeviceConfig> {
 
 pub fn apply_config_to_env(config: &DeviceConfig) {
     if let Some(ref api_key) = config.api_key {
-        env::set_var("ANTHROPIC_AUTH_TOKEN", api_key);
+        unsafe { env::set_var("ANTHROPIC_AUTH_TOKEN", api_key) };
     }
     if let Some(ref base_url) = config.base_url {
-        env::set_var("ANTHROPIC_BASE_URL", base_url);
+        unsafe { env::set_var("ANTHROPIC_BASE_URL", base_url) };
     }
     if let Some(ref model) = config.model {
-        env::set_var("ANTHROPIC_DEFAULT_MODEL", model);
+        unsafe { env::set_var("ANTHROPIC_DEFAULT_MODEL", model) };
     }
     if let Some(ref provider) = config.provider {
-        env::set_var("CLAUDE_RS_PROVIDER", provider);
+        unsafe { env::set_var("CLAUDE_RS_PROVIDER", provider) };
     }
 }
 
 pub fn init() -> anyhow::Result<DeviceConfig> {
     let selected_lang = select_language();
-    env::set_var("CLAUDE_RS_LANG", &selected_lang);
+    unsafe { env::set_var("CLAUDE_RS_LANG", &selected_lang) };
 
     if let Some(mut config) = load_config() {
         config.language = Some(selected_lang.clone());
