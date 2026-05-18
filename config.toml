@@ -1,0 +1,12 @@
+# Claude Rust Configuration
+# Support: admin.tuptup.top/api and custom providers
+
+api_key = "YOUR_API_KEY_HERE"
+base_url = "https://admin.tuptup.top/api"
+model = "doubao-seed-2-0-lite-260215"
+provider = "custom"
+timeout_sec = 120
+device.uuid = ""
+
+# Language setting: "en" or "zh"
+language = "en"

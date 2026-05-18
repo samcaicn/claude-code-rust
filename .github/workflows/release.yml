@@ -1,0 +1,107 @@
+name: Release
+
+on:
+  push:
+    branches: [claude]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v0.11.3)'
+        required: true
+        default: 'v0.11.3'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-macos:
+    name: Build macOS (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            arch: arm64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            arch: x86_64
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: |
+          cargo build --release --target ${{ matrix.target }} --bin claude-rs
+          ls -la target/${{ matrix.target }}/release/claude-rs
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-rs-${{ matrix.arch }}-apple-darwin
+          path: target/${{ matrix.target }}/release/claude-rs
+          retention-days: 5
+
+  build-linux:
+    name: Build Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build release
+        run: |
+          cargo build --release --bin claude-rs
+          ls -la target/release/claude-rs
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-rs-x86_64-unknown-linux-gnu
+          path: target/release/claude-rs
+          retention-days: 5
+
+  release:
+    name: Create Release
+    needs: [build-macos, build-linux]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Display structure of downloaded files
+        run: ls -laR artifacts/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Claude Rust ${{ github.event.inputs.version }}
+          draft: false
+          prerelease: true
+          files: |
+            artifacts/claude-rs-arm64-apple-darwin/claude-rs
+            artifacts/claude-rs-x86_64-apple-darwin/claude-rs
+            artifacts/claude-rs-x86_64-unknown-linux-gnu/claude-rs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
