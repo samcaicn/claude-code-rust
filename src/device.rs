@@ -36,6 +36,7 @@ impl Default for DeviceConfig {
 
 const LANG_EN: &str = "en";
 const LANG_ZH: &str = "zh";
+const DEFAULT_REGISTER_URL: &str = "https://admin.tuptup.top/api";
 
 fn get_system_lang() -> &'static str {
     let lang = env::var("LANG").or_else(|_| env::var("LC_ALL")).unwrap_or_default();
@@ -95,6 +96,10 @@ fn prompt_language_selection() -> String {
     }
 }
 
+fn set_env_var(key: &str, value: &str) {
+    unsafe { env::set_var(key, value) };
+}
+
 pub fn select_language() -> String {
     if let Ok(lang) = env::var("CLAUDE_RS_LANG") {
         if lang == LANG_ZH || lang == LANG_EN {
@@ -111,7 +116,7 @@ pub fn select_language() -> String {
     }
 
     let selected = prompt_language_selection();
-    unsafe { env::set_var("CLAUDE_RS_LANG", &selected) };
+    set_env_var("CLAUDE_RS_LANG", &selected);
     selected
 }
 
@@ -238,7 +243,7 @@ pub fn register_device() -> anyhow::Result<DeviceConfig> {
     };
 
     let base_url = env::var("CLAUDE_RS_REGISTER_URL")
-        .unwrap_or_else(|_| "https://admin.tuptup.top/api".to_string());
+        .unwrap_or_else(|_| DEFAULT_REGISTER_URL.to_string());
 
     let url = format!("{}/device/register", base_url);
 
@@ -290,22 +295,22 @@ pub fn register_device() -> anyhow::Result<DeviceConfig> {
 
 pub fn apply_config_to_env(config: &DeviceConfig) {
     if let Some(ref api_key) = config.api_key {
-        unsafe { env::set_var("ANTHROPIC_AUTH_TOKEN", api_key) };
+        set_env_var("ANTHROPIC_AUTH_TOKEN", api_key);
     }
     if let Some(ref base_url) = config.base_url {
-        unsafe { env::set_var("ANTHROPIC_BASE_URL", base_url) };
+        set_env_var("ANTHROPIC_BASE_URL", base_url);
     }
     if let Some(ref model) = config.model {
-        unsafe { env::set_var("ANTHROPIC_DEFAULT_MODEL", model) };
+        set_env_var("ANTHROPIC_DEFAULT_MODEL", model);
     }
     if let Some(ref provider) = config.provider {
-        unsafe { env::set_var("CLAUDE_RS_PROVIDER", provider) };
+        set_env_var("CLAUDE_RS_PROVIDER", provider);
     }
 }
 
 pub fn init() -> anyhow::Result<DeviceConfig> {
     let selected_lang = select_language();
-    unsafe { env::set_var("CLAUDE_RS_LANG", &selected_lang) };
+    set_env_var("CLAUDE_RS_LANG", &selected_lang);
 
     if let Some(mut config) = load_config() {
         config.language = Some(selected_lang.clone());

@@ -15,26 +15,15 @@ env:
 
 jobs:
   build-macos:
-    name: Build macOS (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            arch: arm64
-          - os: macos-13
-            target: x86_64-apple-darwin
-            arch: x86_64
-
+    name: Build macOS (x86_64)
+    runs-on: macos-13
     steps:
       - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: x86_64-apple-darwin
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -51,21 +40,21 @@ jobs:
 
       - name: Build release
         run: |
-          cargo build --release --target ${{ matrix.target }} --bin claude-rs
-          ls -la target/${{ matrix.target }}/release/claude-rs
+          cargo build --release --target x86_64-apple-darwin --bin claude-rs
+          ls -la target/x86_64-apple-darwin/release/claude-rs
 
       - name: Bundle bridge script
         run: |
-          mkdir -p target/${{ matrix.target }}/release/agent-sdk/dist
-          cp -r agent-sdk/dist/bridge.js target/${{ matrix.target }}/release/agent-sdk/dist/
-          cp -r agent-sdk/dist/types.js target/${{ matrix.target }}/release/agent-sdk/dist/
-          ls -la target/${{ matrix.target }}/release/agent-sdk/dist/
+          mkdir -p target/x86_64-apple-darwin/release/agent-sdk/dist
+          cp -r agent-sdk/dist/bridge.js target/x86_64-apple-darwin/release/agent-sdk/dist/
+          cp -r agent-sdk/dist/types.js target/x86_64-apple-darwin/release/agent-sdk/dist/
+          ls -la target/x86_64-apple-darwin/release/agent-sdk/dist/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: claude-rs-${{ matrix.arch }}-apple-darwin
-          path: target/${{ matrix.target }}/release/
+          name: claude-rs-x86_64-apple-darwin
+          path: target/x86_64-apple-darwin/release/
           retention-days: 5
 
   build-linux:
@@ -128,8 +117,6 @@ jobs:
 
       - name: Prepare release artifacts
         run: |
-          mv artifacts/claude-rs-arm64-apple-darwin/claude-rs ./claude-rs-arm64-apple-darwin
-          mv artifacts/claude-rs-arm64-apple-darwin/agent-sdk ./claude-rs-arm64-apple-darwin/
           mv artifacts/claude-rs-x86_64-apple-darwin/claude-rs ./claude-rs-x86_64-apple-darwin
           mv artifacts/claude-rs-x86_64-apple-darwin/agent-sdk ./claude-rs-x86_64-apple-darwin/
           mv artifacts/claude-rs-x86_64-unknown-linux-gnu/claude-rs ./claude-rs-x86_64-unknown-linux-gnu
@@ -144,7 +131,6 @@ jobs:
           draft: false
           prerelease: true
           files: |
-            claude-rs-arm64-apple-darwin
             claude-rs-x86_64-apple-darwin
             claude-rs-x86_64-unknown-linux-gnu
         env:
